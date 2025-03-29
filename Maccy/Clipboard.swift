@@ -144,6 +144,18 @@ class Clipboard {
 
     pasteboard.clearContents()
   }
+    
+func copyPasteboardItem(_ item: NSPasteboardItem) -> NSPasteboardItem {
+    let newItem = NSPasteboardItem()
+    
+    for type in item.types {
+        if let data = item.data(forType: type) {
+            newItem.setData(data, forType: type)
+        }
+    }
+    
+    return newItem
+}
 
   @objc
   @MainActor
@@ -179,13 +191,18 @@ class Clipboard {
     // - https://github.com/p0deje/Maccy/issues/78
     // - https://github.com/p0deje/Maccy/issues/472
     var contents = [HistoryItemContent]()
+    var modifiedItems = [NSPasteboardItem]()
+    var hasModifiedItems: Bool = false
     pasteboard.pasteboardItems?.forEach({ item in
       var types = Set(item.types)
-      if types.contains(.string) && isEmptyString(item) && !richText(item) {
+        let mutableItem = copyPasteboardItem(item)
+      if types.contains(.string) && isEmptyString(mutableItem) && !richText(mutableItem) {
+        modifiedItems.append(mutableItem)
         return
       }
 
-      if shouldIgnore(item) {
+      if shouldIgnore(mutableItem) {
+          modifiedItems.append(mutableItem)
         return
       }
 
@@ -202,9 +219,39 @@ class Clipboard {
       }
 
       types.forEach { type in
-        contents.append(HistoryItemContent(type: type.rawValue, value: item.data(forType: type)))
+        var newData: Data = mutableItem.data(forType: type)!;
+        if type == .string {
+            var text = String(data: newData, encoding: .utf8)!
+            
+            for (index, matchRegex) in Defaults[.modifyMatchRegexp].enumerated() {
+                do {
+                    let regex = try NSRegularExpression(pattern: matchRegex)
+                    let range = NSRange(text.startIndex..., in: text)
+                    if regex.numberOfMatches(in: text, range: range) > 0 {
+                        let replaceRegex = try NSRegularExpression(pattern: Defaults[.modifyChangeRegexp][index])
+                        let replacementString = Defaults[.modifyReplacementString][index]
+                        let originalText = text
+                        text = replaceRegex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacementString)
+                        newData = text.data(using: .utf8)!;
+                        hasModifiedItems = text != originalText;
+                    }
+                } catch {
+                    // ignore the invalid regex and continue
+                    continue;
+                }
+            }
+            mutableItem.setString(text, forType: .string)
+        }
+          
+        contents.append(HistoryItemContent(type: type.rawValue, value: newData))
       }
+      modifiedItems.append(mutableItem)
     })
+      if hasModifiedItems {
+          changeCount += 1
+          pasteboard.clearContents()
+          pasteboard.writeObjects(modifiedItems)
+      }
 
     guard !contents.isEmpty else {
       return

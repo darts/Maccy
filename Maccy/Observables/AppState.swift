@@ -192,6 +192,13 @@ class AppState: Sendable {
             toolbarIcon: NSImage.gearshape2!
           ) {
             AdvancedSettingsPane()
+          },
+          Settings.Pane(
+            identifier: Settings.PaneIdentifier.modify,
+            title: NSLocalizedString("Title", tableName: "ModifySettings", comment: ""),
+            toolbarIcon: NSImage.eraser!
+          ) {
+            RemoveContentSettingsPane()
           }
         ]
       )

@@ -33,6 +33,9 @@ extension Defaults.Keys {
       "net.antelle.keeweb"
     ])
   )
+  static let modifyMatchRegexp = Key<[String]>("modifyMatchRegexp", default: [#"https:\/\/youtu\.be"#])
+  static let modifyChangeRegexp = Key<[String]>("modifyChangeRegexp", default: [#"si=[^&]+&?"#])
+  static let modifyReplacementString = Key<[String]>("modifyReplacementString", default: [""])
   static let imageMaxHeight = Key<Int>("imageMaxHeight", default: 40)
   static let lastReviewRequestedAt = Key<Date>("lastReviewRequestedAt", default: Date.now)
   static let menuIcon = Key<MenuIcon>("menuIcon", default: .maccy)
