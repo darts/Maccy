@@ -102,7 +102,7 @@ struct RemoveContentSettingsPane: View {
         .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(.gray)
         .controlSize(.small)
-    }.frame(maxWidth: 500, minHeight: 400).padding()
+    }.frame(minWidth: 450, maxWidth: 500, minHeight: 400).padding()
   }
 
   private func removeModify(_ index: Int?) {
