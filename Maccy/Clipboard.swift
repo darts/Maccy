@@ -145,10 +145,10 @@ class Clipboard {
     pasteboard.clearContents()
   }
     
-func copyPasteboardItem(_ item: NSPasteboardItem) -> NSPasteboardItem {
+    func copyPasteboardItem(_ item: NSPasteboardItem, types: Set<NSPasteboard.PasteboardType>) -> NSPasteboardItem {
     let newItem = NSPasteboardItem()
     
-    for type in item.types {
+    for type in types {
         if let data = item.data(forType: type) {
             newItem.setData(data, forType: type)
         }
@@ -195,14 +195,13 @@ func copyPasteboardItem(_ item: NSPasteboardItem) -> NSPasteboardItem {
     var hasModifiedItems: Bool = false
     pasteboard.pasteboardItems?.forEach({ item in
       var types = Set(item.types)
-        let mutableItem = copyPasteboardItem(item)
-      if types.contains(.string) && isEmptyString(mutableItem) && !richText(mutableItem) {
-        modifiedItems.append(mutableItem)
+      if types.contains(.string) && isEmptyString(item) && !richText(item) {
+        modifiedItems.append(item)
         return
       }
 
-      if shouldIgnore(mutableItem) {
-          modifiedItems.append(mutableItem)
+      if shouldIgnore(item) {
+        modifiedItems.append(item)
         return
       }
 
@@ -217,41 +216,23 @@ func copyPasteboardItem(_ item: NSPasteboardItem) -> NSPasteboardItem {
       if types.isSuperset(of: [.microsoftLinkSource, .microsoftObjectLink]) {
         types = types.subtracting([.microsoftLinkSource, .microsoftObjectLink, .pdf])
       }
-
+        
+      var mutableItem = copyPasteboardItem(item, types: types)
       types.forEach { type in
-        var newData: Data = mutableItem.data(forType: type)!;
-        if type == .string {
-            var text = String(data: newData, encoding: .utf8)!
-            
-            for (index, matchRegex) in Defaults[.modifyMatchRegexp].enumerated() {
-                do {
-                    let regex = try NSRegularExpression(pattern: matchRegex)
-                    let range = NSRange(text.startIndex..., in: text)
-                    if regex.numberOfMatches(in: text, range: range) > 0 {
-                        let replaceRegex = try NSRegularExpression(pattern: Defaults[.modifyChangeRegexp][index])
-                        let replacementString = Defaults[.modifyReplacementString][index]
-                        let originalText = text
-                        text = replaceRegex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacementString)
-                        newData = text.data(using: .utf8)!;
-                        hasModifiedItems = text != originalText;
-                    }
-                } catch {
-                    // ignore the invalid regex and continue
-                    continue;
-                }
-            }
-            mutableItem.setString(text, forType: .string)
-        }
-          
+        var newData: Data = item.data(forType: type)!;
+        
+        hasModifiedItems = modifyStringsIfApplicable(&newData, pasteboardItem: &mutableItem, type: type) || hasModifiedItems
+        
         contents.append(HistoryItemContent(type: type.rawValue, value: newData))
       }
+      
       modifiedItems.append(mutableItem)
     })
-      if hasModifiedItems {
-          changeCount += 1
-          pasteboard.clearContents()
-          pasteboard.writeObjects(modifiedItems)
-      }
+    if hasModifiedItems {
+      changeCount += 1
+      pasteboard.clearContents()
+      pasteboard.writeObjects(modifiedItems)
+    }
 
     guard !contents.isEmpty else {
       return
@@ -266,6 +247,33 @@ func copyPasteboardItem(_ item: NSPasteboardItem) -> NSPasteboardItem {
 
     onNewCopyHooks.forEach({ $0(historyItem) })
   }
+    
+    private func modifyStringsIfApplicable(_ data: inout Data, pasteboardItem: inout NSPasteboardItem, type: NSPasteboard.PasteboardType ) -> Bool {
+        var hasModifiedItems = false
+        if type == .string {
+            var text = String(data: data, encoding: .utf8)!
+            
+            for (index, matchRegex) in Defaults[.modifyMatchRegexp].enumerated() {
+                do {
+                    let regex = try NSRegularExpression(pattern: matchRegex)
+                    let range = NSRange(text.startIndex..., in: text)
+                    if regex.numberOfMatches(in: text, range: range) > 0 {
+                        let replaceRegex = try NSRegularExpression(pattern: Defaults[.modifyChangeRegexp][index])
+                        let replacementString = Defaults[.modifyReplacementString][index]
+                        let originalText = text
+                        text = replaceRegex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacementString)
+                        data = text.data(using: .utf8)!;
+                        hasModifiedItems = hasModifiedItems || (text != originalText);
+                    }
+                } catch {
+                    // ignore the invalid regex and continue
+                    continue;
+          }
+        }
+        pasteboardItem.setString(text, forType: .string)
+      }
+      return hasModifiedItems
+    }
 
   private func shouldIgnore(_ types: Set<NSPasteboard.PasteboardType>) -> Bool {
     let ignoredTypes = self.ignoredTypes
