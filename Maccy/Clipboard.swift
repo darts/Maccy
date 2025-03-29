@@ -253,13 +253,13 @@ class Clipboard {
         if type == .string {
             var text = String(data: data, encoding: .utf8)!
             
-            for (index, matchRegex) in Defaults[.modifyMatchRegexp].enumerated() {
+            for (index, matchRegex) in Defaults[.searchModifyRegexp].enumerated() {
                 do {
                     let regex = try NSRegularExpression(pattern: matchRegex)
                     let range = NSRange(text.startIndex..., in: text)
                     if regex.numberOfMatches(in: text, range: range) > 0 {
-                        let replaceRegex = try NSRegularExpression(pattern: Defaults[.modifyChangeRegexp][index])
-                        let replacementString = Defaults[.modifyReplacementString][index]
+                        let replaceRegex = try NSRegularExpression(pattern: Defaults[.changeModifyRegexp][index])
+                        let replacementString = Defaults[.replaceModifyRegexp][index]
                         let originalText = text
                         text = replaceRegex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacementString)
                         data = text.data(using: .utf8)!;

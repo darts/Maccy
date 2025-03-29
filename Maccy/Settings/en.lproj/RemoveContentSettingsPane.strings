@@ -1,0 +1,5 @@
+"Title" = "Modify";
+"SearchHeading" = "Search Regex";
+"ModifyHeading" = "Modify Regex";
+"ReplacementHeading" = "Replacement String";
+"ModifyRegexpsDescription" = "It's possible to modify certain copies based on regular expressions.";

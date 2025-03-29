@@ -195,7 +195,7 @@ class AppState: Sendable {
           },
           Settings.Pane(
             identifier: Settings.PaneIdentifier.modify,
-            title: NSLocalizedString("Title", tableName: "ModifySettings", comment: ""),
+            title: NSLocalizedString("Title", tableName: "RemoveContentSettingsPane", comment: ""),
             toolbarIcon: NSImage.eraser!
           ) {
             RemoveContentSettingsPane()
