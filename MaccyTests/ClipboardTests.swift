@@ -242,6 +242,70 @@ class ClipboardTests: XCTestCase {
     XCTAssertEqual(pasteboard.string(forType: .fileURL), "file://foo.bar")
     XCTAssertNil(pasteboard.data(forType: .rtf))
   }
+  
+  func testModifyOnCopyReplacesStringContents() {
+    Defaults[.searchModifyRegexp] = ["foo"]
+    Defaults[.changeModifyRegexp] = ["bar"]
+    Defaults[.replaceModifyRegexp] = ["baz"]
+    
+    let originalString = "foobarbaz"
+    let expectedString = "foobazbaz"
+    
+    let hookExpectation = expectation(description: "Hook is called")
+    clipboard.onNewCopy({ (item: HistoryItem) in
+      if String(data: item.contents[0].value!, encoding: .utf8) == expectedString {
+        hookExpectation.fulfill()
+      }
+    })
+    clipboard.start()
+    pasteboard.declareTypes([.string], owner: nil)
+    pasteboard.setString(originalString, forType: .string)
+    waitForExpectations(timeout: 2)
+  }
+  
+  func testModifyOnCopyExecutesRegexpsSequentially() {
+    Defaults[.searchModifyRegexp] = ["foo", "azb"]
+    Defaults[.changeModifyRegexp] = ["bar", "zba"]
+    Defaults[.replaceModifyRegexp] = ["baz", "_"]
+    
+    let originalString = "foobarbaz"
+    let expectedString = "fooba_z"
+    
+    let hookExpectation = expectation(description: "Hook is called")
+    clipboard.onNewCopy({ (item: HistoryItem) in
+      if String(data: item.contents[0].value!, encoding: .utf8) == expectedString {
+        hookExpectation.fulfill()
+      }
+    })
+    clipboard.start()
+    pasteboard.declareTypes([.string], owner: nil)
+    pasteboard.setString(originalString, forType: .string)
+    waitForExpectations(timeout: 2)
+  }
+  
+  func testModifyOnCopyReplacesCurrentPasteboard() {
+    Defaults[.searchModifyRegexp] = ["foo"]
+    Defaults[.changeModifyRegexp] = ["bar"]
+    Defaults[.replaceModifyRegexp] = ["baz"]
+    
+    let originalString = "foobarbaz"
+    let expectedString = "foobazbaz"
+    
+    let hookExpectation = expectation(description: "Hook is called")
+    clipboard.onNewCopy({ (item: HistoryItem) in
+      hookExpectation.fulfill()
+    })
+    
+    let pasteboardCount = pasteboard.changeCount
+    
+    clipboard.start()
+    pasteboard.declareTypes([.string], owner: nil)
+    pasteboard.setString(originalString, forType: .string)
+    waitForExpectations(timeout: 2)
+    
+    XCTAssertEqual(pasteboardCount + 2, pasteboard.changeCount)
+    XCTAssertEqual(String(data: (pasteboard.pasteboardItems?[0].data(forType: .string))!, encoding: .utf8), expectedString)
+  }
 
   func testHandlesItemsWithoutData() {
     let hookExpectation = expectation(description: "Hook is called")
@@ -298,7 +362,7 @@ class ClipboardTests: XCTestCase {
 
     waitForExpectations(timeout: 2)
   }
-
+  
   func testRemovesDynamicTypes() {
     let hookExpectation = expectation(description: "Hook is called")
     clipboard.onNewCopy({ (item: HistoryItem) in
