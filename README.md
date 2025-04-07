@@ -121,22 +121,22 @@ The process works as follows, going through each regex set sequentially when a s
 
 **Example A:**
 
-Copied String = `https://youtu.be/dQw4w9WgXcQ is a neat video`
+Copied String = `https://youtu.be/dQw4w9WgXcQ?si=aYSMGK-FxZe1XuBf is a neat video`
 
 | Search Regex         | Modify Regex  | Replacement String |
 | ---------------------|---------------|--------------------|
-| `https:\/\/youtu.be` | `\ | ``                 |
+| `https:\/\/youtu.be` | `\?si=[^\s]+` | ``                 |
 
 Output String = `https://youtu.be/dQw4w9WgXcQ is a neat video`
 
 
 **Example B:**
 
-Copied String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234
+Copied String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234?atlOrigin=eyJpIjogIldoYXQgYXJlIHlvdSBsb29raW5nIGZvciBoZXJlPyIsInAiOiAiaiJ9`
 
 | Search Regex                      | Modify Regex         | Replacement String |
 | ----------------------------------|----------------------|--------------------|
-| `https:\/\/mapconv.atlassian.net` | `\ | ``                 |
+| `https:\/\/mapconv.atlassian.net` | `\?atlOrigin=[^\s]+` | ``                 |
 
 Output String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234`
 
