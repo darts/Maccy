@@ -20,6 +20,7 @@ Maccy works on macOS Sonoma 14 or higher.
   * [Ignore Copied Items](#ignore-copied-items)
   * [Ignore Custom Copy Types](#ignore-custom-copy-types)
   * [Speed up Clipboard Check Interval](#speed-up-clipboard-check-interval)
+  * [Modifying Copied Items](#modifying-copied-items)
 * [FAQ](#faq)
   * [Why doesn't it paste when I select an item in history?](#why-doesnt-it-paste-when-i-select-an-item-in-history)
   * [When assigning a hotkey to open Maccy, it says that this hotkey is already used in some system setting.](#when-assigning-a-hotkey-to-open-maccy-it-says-that-this-hotkey-is-already-used-in-some-system-setting)
@@ -109,6 +110,47 @@ to speed it up, you can change it with `defaults`:
 ```sh
 defaults write org.p0deje.Maccy clipboardCheckInterval 0.1 # 100 ms
 ```
+
+### Modifying Copied Items
+
+The process works as follows, going through each regex set sequentially when a string is copied:
+
+1. Try to match against `Search Regex`. If successful, continue.
+2. Try to match against `Modify Regex`. If successful, continue.
+3. Replace content matched be `Modify Regex` with `Replacement String`.
+
+**Example A:**
+
+Copied String = `https://youtu.be/dQw4w9WgXcQ is a neat video`
+
+| Search Regex         | Modify Regex  | Replacement String |
+| ---------------------|---------------|--------------------|
+| `https:\/\/youtu.be` | `\ | ``                 |
+
+Output String = `https://youtu.be/dQw4w9WgXcQ is a neat video`
+
+
+**Example B:**
+
+Copied String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234
+
+| Search Regex                      | Modify Regex         | Replacement String |
+| ----------------------------------|----------------------|--------------------|
+| `https:\/\/mapconv.atlassian.net` | `\ | ``                 |
+
+Output String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234`
+
+
+**Example C:**
+
+Copied String = `Please eat this pizza`
+
+| Search Regex | Modify Regex | Replacement String |
+| -------------|--------------|--------------------|
+| `eat`        | `pizza`      | `sandwich`         |
+
+Output String = `Please eat this sandwich`
+
 
 ## FAQ
 
