@@ -173,6 +173,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       _ = try? Storage.shared.removeUnpersistableContents()
     }
 
+    // Test hosts may share standard defaults with the installed app,
+    // so they shouldn't pick up its rules. Legacy keys are kept for older builds.
+    if !Self.isTesting {
+      ensureMigration(key: "2026-10-21-combine-modify-rules") {
+        Defaults[.modifyRules] += ModifyRule.legacyRules(in: .standard)
+      }
+    }
+
     // The following defaults are not used in Maccy 2.x
     // and should be removed in 3.x.
     // - LaunchAtLogin__hasMigrated

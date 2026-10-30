@@ -22,6 +22,8 @@ Maccy works on macOS Sonoma 14 or higher.
   * [Ignore Copied Items](#ignore-copied-items)
   * [Ignore Custom Copy Types](#ignore-custom-copy-types)
   * [Speed up Clipboard Check Interval](#speed-up-clipboard-check-interval)
+  * [Modifying Copied Items](#modifying-copied-items)
+  * [Fork Builds](#fork-builds)
 * [FAQ](#faq)
   * [Why doesn't it paste when I select an item in history?](#why-doesnt-it-paste-when-i-select-an-item-in-history)
   * [When assigning a hotkey to open Maccy, it says that this hotkey is already used in some system setting.](#when-assigning-a-hotkey-to-open-maccy-it-says-that-this-hotkey-is-already-used-in-some-system-setting)
@@ -112,6 +114,70 @@ to speed it up, you can change it with `defaults`:
 ```sh
 defaults write org.p0deje.Maccy clipboardCheckInterval 0.1 # 100 ms
 ```
+
+### Modifying Copied Items
+
+Maccy can rewrite copied text, for example to strip tracking parameters from links.
+Rules are configured in the _Modify_ settings tab, and each rule has three parts:
+
+* `Search Regex`: the rule only applies when the copied text matches it. Leave it empty to apply the rule to every copy.
+* `Modify Regex`: every match of it is replaced.
+* `Replacement String`: what each match is replaced with. Use `$1`, `$2`, etc. to insert captured groups, and write `\$` and `\\` for a literal `$` and `\`.
+
+Rules run from top to bottom, and each rule receives the output of the previous one.
+The modified text replaces the clipboard contents, so it's what gets pasted and saved in history.
+Formatted versions of a modified copy (such as RTF and HTML) are removed because they still contain the original text.
+Ignored copies and items selected from Maccy's history are not modified.
+Use the _Test_ field below the rules to try them out.
+
+**Example A:**
+
+Copied String = `https://youtu.be/dQw4w9WgXcQ?si=aYSMGK-FxZe1XuBf is a neat video`
+
+| Search Regex         | Modify Regex  | Replacement String |
+| ---------------------|---------------|--------------------|
+| `https:\/\/youtu.be` | `\?si=[^\s]+` | _(empty)_          |
+
+Output String = `https://youtu.be/dQw4w9WgXcQ is a neat video`
+
+
+**Example B:**
+
+Copied String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234?atlOrigin=eyJpIjogIldoYXQgYXJlIHlvdSBsb29raW5nIGZvciBoZXJlPyIsInAiOiAiaiJ9`
+
+| Search Regex                      | Modify Regex         | Replacement String |
+| ----------------------------------|----------------------|--------------------|
+| `https:\/\/mapconv.atlassian.net` | `\?atlOrigin=[^\s]+` | _(empty)_          |
+
+Output String = `Please complete this high priority ticket: https://mapconv.atlassian.net/browse/PM-1234`
+
+
+**Example C:**
+
+Copied String = `Please eat this pizza`
+
+| Search Regex | Modify Regex | Replacement String |
+| -------------|--------------|--------------------|
+| `eat`        | `pizza`      | `sandwich`         |
+
+Output String = `Please eat this sandwich`
+
+### Fork Builds
+
+Every push to `master` builds the app with [GitHub Actions](../../actions/workflows/build.yml), and the zipped
+`Maccy.app` can be downloaded from the run's artifacts. Pushing a tag that starts with `v` publishes the build
+as a GitHub release.
+
+These builds are signed ad hoc rather than with a Developer ID, so macOS blocks them on first launch. To open one, go
+to _System Settings → Privacy & Security_ and click _Open Anyway_, or remove the quarantine attribute:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Maccy.app
+```
+
+Each build has a different signature, so after updating, macOS asks to grant Accessibility access again and may ask
+whether Maccy can access its own data. Allow it to keep your history and settings.
+Updates are turned off because official Maccy releases don't include the changes from this fork.
 
 ## FAQ
 

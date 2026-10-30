@@ -1,28 +1,27 @@
-import Testing
+import XCTest
 @testable import Maccy
 
 @MainActor
-struct ShortenedTests {
-  @Test("Shortened returns at most max length")
-  func shortenedReturnsAtMostMaxLength() {
-    #expect("abcdef".shortened(to: 3) == "abc")
+final class ShortenedTests: XCTestCase {
+  func testShortenedReturnsAtMostMaxLength() {
+    XCTAssertEqual("abcdef".shortened(to: 3), "abc")
   }
 
-  @Test("Shortened is a no-op within the limit", arguments: ["abc", ""])
-  func shortenedNoOpWhenWithinLimit(input: String) {
-    #expect(input.shortened(to: 3) == input)
+  func testShortenedNoOpWhenWithinLimit() {
+    XCTAssertEqual("abc".shortened(to: 3), "abc")
+    XCTAssertEqual("".shortened(to: 3), "")
   }
 
-  @Test("Shortened with a large cap is a no-op")
-  func shortenedLargeCapIsNoOp() {
-    #expect("abcdefghij".shortened(to: 1_000) == "abcdefghij")
+  func testShortenedLargeCapIsNoOp() {
+    XCTAssertEqual("abcdefghij".shortened(to: 1_000), "abcdefghij")
   }
 
-  @Test("Shortened result never exceeds max length", arguments: 0...8)
-  func shortenedResultNeverExceedsMaxLength(length: Int) {
+  func testShortenedResultNeverExceedsMaxLength() {
     let input = "abcdef"
-    let result = input.shortened(to: length)
-    #expect(result.count <= length)
-    #expect(result.count == min(length, input.count))
+    for length in 0...8 {
+      let result = input.shortened(to: length)
+      XCTAssertLessThanOrEqual(result.count, length, "shortened(to: \(length)) must be <= \(length) chars")
+      XCTAssertEqual(result.count, min(length, input.count))
+    }
   }
 }

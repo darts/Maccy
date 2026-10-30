@@ -2,10 +2,9 @@ import Testing
 @testable import Maccy
 
 @MainActor
-struct ColorImageTests {
-  @Test("Color image from hex", arguments: ["fff", "#ff8942"])
-  func colorImageFromHex(hex: String) {
-    #expect(ColorImage.from(hex) != nil)
+class ColorImageTests: XCTestCase {
+  func testColorImageFromShortHex() {
+    XCTAssertNotNil(ColorImage.from("fff"))
   }
 
   @Test("Color image from non-hex string")

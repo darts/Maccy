@@ -1,0 +1,117 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Sign ad hoc so that no Apple Developer certificate is needed, and don't
+  # wait for macros and plugins of Swift packages to be trusted interactively.
+  XCODEBUILD_FLAGS: >-
+    -project Maccy.xcodeproj
+    -scheme Maccy
+    -derivedDataPath DerivedData
+    -clonedSourcePackagesDirPath SourcePackages
+    -skipMacroValidation
+    -skipPackagePluginValidation
+    CODE_SIGN_IDENTITY=-
+    CODE_SIGN_STYLE=Manual
+    DEVELOPMENT_TEAM=
+
+jobs:
+  build:
+    runs-on: macos-26
+    outputs:
+      artifact: ${{ steps.package.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: SourcePackages
+          key: spm-${{ hashFiles('Maccy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      # Ad hoc signing adds the get-task-allow entitlement by default,
+      # which would let other processes attach to the app as a debugger.
+      - name: Build
+        run: |
+          xcodebuild -version
+          xcodebuild $XCODEBUILD_FLAGS -configuration Release -destination 'generic/platform=macOS' \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO build
+
+      - name: Package
+        id: package
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          app=DerivedData/Build/Products/Release/Maccy.app
+          codesign --verify --deep --strict "$app"
+          if codesign -d --entitlements - "$app" 2>/dev/null | grep -q get-task-allow; then
+            echo "::error::The app has the get-task-allow entitlement"
+            exit 1
+          fi
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
+          name="Maccy-$version-${SHA::7}.zip"
+          # ditto keeps the symlinks and permissions that frameworks inside the app rely on.
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        id: upload
+        with:
+          path: ${{ steps.package.outputs.name }}
+          archive: false
+          if-no-files-found: error
+
+      - name: Summary
+        run: echo "Download [${{ steps.package.outputs.name }}](${{ steps.upload.outputs.artifact-url }})" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: SourcePackages
+          key: spm-${{ hashFiles('Maccy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      # UI tests need Accessibility permissions, which hosted runners can't grant.
+      # The app is built without its sandbox entitlements so the test host runs the
+      # same way regardless of existing app containers on the machine.
+      - name: Test
+        run: xcodebuild $XCODEBUILD_FLAGS -destination 'platform=macOS' CODE_SIGN_ENTITLEMENTS= test -only-testing:MaccyTests
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          skip-decompress: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ needs.build.outputs.artifact }}
+        # Upload to an existing release when a failed run is retried.
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ARTIFACT" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ARTIFACT" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          fi

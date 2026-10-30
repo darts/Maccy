@@ -3,102 +3,157 @@ import Testing
 import Defaults
 @testable import Maccy
 
-private final class BundleToken {}
-
-private func textImage(_ text: String) -> NSImage {
-  let string = NSAttributedString(string: text, attributes: [
-    .font: NSFont.boldSystemFont(ofSize: 48),
-    .foregroundColor: NSColor.black
-  ])
-  let size = NSSize(width: string.size().width + 40, height: string.size().height + 40)
-  return NSImage(size: size, flipped: false) { rect in
-    NSColor.white.setFill()
-    rect.fill()
-    string.draw(at: NSPoint(x: 20, y: 20))
-    return true
+// swiftlint:disable force_try
+@MainActor
+class HistoryItemTests: XCTestCase {
+  func testSortedPinsPlacesLettersBeforeSymbols() {
+    XCTAssertEqual(
+      HistoryItem.sortedPins(["/", "c", "[", "b", "-", "\\", "y"]),
+      ["b", "c", "y", "-", "/", "[", "\\"]
+    )
   }
-}
 
-private let stringTitleCases: [(input: String, title: String)] = [
-  ("foo", "foo"),
-  ("   foo bar   ", "···foo bar···"),
-  ("\nfoo\nbar\n", "⏎foo⏎bar⏎"),
-  ("\tfoo\tbar\t", "⇥foo⇥bar⇥")
-]
+  func testTitleForString() {
+    let title = "foo"
+    let item = historyItem(title)
+    XCTAssertEqual(item.title, title)
+  }
 
-private let objectReplacementTitleCases: [(input: String, title: String)] = [
-  ("\u{FFFC}foo\u{FFFC}bar\u{FFFC}", "foobar"),
-  ("\u{FFFC}\u{FFFC}", "")
-]
+  func testTitleWithWhitespaces() {
+    let title = "   foo bar   "
+    let item = historyItem(title)
+    XCTAssertEqual(item.title, "···foo bar···")
+  }
 
-extension SharedStateTests {
-  @MainActor
-  struct HistoryItemTests {
-    @Test("Sorted pins place letters before symbols")
-    func sortedPinsPlacesLettersBeforeSymbols() {
-      #expect(
-        HistoryItem.sortedPins(["/", "c", "[", "b", "-", "\\", "y"]) ==
-        ["b", "c", "y", "-", "/", "[", "\\"]
-      )
-    }
+  func testTitleWithNewlines() {
+    let title = "\nfoo\nbar\n"
+    let item = historyItem(title)
+    XCTAssertEqual(item.title, "⏎foo⏎bar⏎")
+  }
 
-    @Test("Title for string", arguments: stringTitleCases)
-    func titleForString(input: String, title: String) {
-      #expect(historyItem(input).title == title)
-    }
+  func testTitleWithTabs() {
+    let title = "\tfoo\tbar\t"
+    let item = historyItem(title)
+    XCTAssertEqual(item.title, "⇥foo⇥bar⇥")
+  }
 
-    // U+FFFC arrives from rich text with inline attachments and hangs CoreText
-    // on macOS 26. See https://github.com/p0deje/Maccy/issues/1520.
-    @Test("Title without object replacement characters", arguments: objectReplacementTitleCases)
-    func titleWithObjectReplacementCharacters(input: String, title: String) {
-      #expect(historyItem(input).title == title)
-    }
+  // U+FFFC arrives from rich text with inline attachments and hangs CoreText
+  // on macOS 26. See https://github.com/p0deje/Maccy/issues/1520.
+  func testTitleWithObjectReplacementCharacters() {
+    let item = historyItem("\u{FFFC}foo\u{FFFC}bar\u{FFFC}")
+    XCTAssertEqual(item.title, "foobar")
+  }
 
-    @Test("Title for RTF")
-    func titleWithRTF() {
-      let rtf = NSAttributedString(string: "foo").rtf(
-        from: NSRange(0...2),
-        documentAttributes: [:]
-      )
-      #expect(historyItem(rtf, .rtf).title == "foo")
-    }
+  func testTitleWithOnlyObjectReplacementCharacters() {
+    let item = historyItem("\u{FFFC}\u{FFFC}")
+    XCTAssertEqual(item.title, "")
+  }
 
-    @Test("Title for HTML")
-    func titleWithHTML() {
-      let html = "<a href='#'>foo</a>".data(using: .utf8)
-      #expect(historyItem(html, .html).title == "foo")
-    }
+  func testTitleWithRTF() {
+    let rtf = NSAttributedString(string: "foo").rtf(
+      from: NSRange(0...2),
+      documentAttributes: [:]
+    )
+    let item = historyItem(rtf, .rtf)
+    XCTAssertEqual(item.title, "foo")
+  }
 
-    @Test("Image has an empty title")
-    func image() throws {
-      let image = try #require(NSImage(named: "NSBluetoothTemplate"))
-      #expect(historyItem(image).title == "")
-    }
+  func testTitleWithHTML() {
+    let html = "<a href='#'>foo</a>".data(using: .utf8)
+    let item = historyItem(html, .html)
+    XCTAssertEqual(item.title, "foo")
+  }
 
-    @Test("Image title becomes the recognized text")
-    func imageTitleBecomesRecognizedText() async throws {
-      let item = historyItem(textImage("Hello Maccy"))
-      let deadline = ContinuousClock.now + .seconds(10)
-      while item.title.isEmpty && ContinuousClock.now < deadline {
-        try await Task.sleep(for: .milliseconds(100))
-      }
-      #expect(item.title == "Hello Maccy")
-    }
+  func testImage() {
+    let image = NSImage(named: "NSBluetoothTemplate")!
+    let item = historyItem(image)
+    XCTAssertEqual(item.title, "")
+  }
 
-    @Test("Title for file", arguments: ["/tmp/foo.bar", "/tmp/产品培训/产品培训.txt"])
-    func file(path: String) {
-      let url = URL(fileURLWithPath: path)
-      #expect(historyItem(url).title == "file://\(path)")
-    }
+  func testFile() {
+    let url = URL(fileURLWithPath: "/tmp/foo.bar")
+    let item = historyItem(url)
+    XCTAssertEqual(item.title, "file:///tmp/foo.bar")
+  }
 
-    @Test("Text from Universal Clipboard")
-    func textFromUniversalClipboard() {
-      let url = URL(fileURLWithPath: "/tmp/foo.bar")
-      let fileURLContent = HistoryItemContent(
-        type: NSPasteboard.PasteboardType.fileURL.rawValue,
-        value: url.dataRepresentation
-      )
-      let textContent = HistoryItemContent(
+  func testFileWithEscapedChars() {
+    let url = URL(fileURLWithPath: "/tmp/产品培训/产品培训.txt")
+    let item = historyItem(url)
+    XCTAssertEqual(item.title, "file:///tmp/产品培训/产品培训.txt")
+  }
+
+  func testTextFromUniversalClipboard() {
+    let url = URL(fileURLWithPath: "/tmp/foo.bar")
+    let fileURLContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.fileURL.rawValue,
+      value: url.dataRepresentation
+    )
+    let textContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.string.rawValue,
+      value: url.lastPathComponent.data(using: .utf8)
+    )
+    let universalClipboardContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.universalClipboard.rawValue,
+      value: "".data(using: .utf8)
+    )
+    let item = HistoryItem()
+    Storage.shared.context.insert(item)
+    item.contents = [fileURLContent, textContent, universalClipboardContent]
+    item.title = item.generateTitle()
+    XCTAssertEqual(item.title, "foo.bar")
+  }
+
+  func testImageFromUniversalClipboard() {
+    let url = Bundle(for: type(of: self)).url(forResource: "guy", withExtension: "jpeg")!
+    let fileURLContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.fileURL.rawValue,
+      value: url.dataRepresentation
+    )
+    let universalClipboardContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.universalClipboard.rawValue,
+      value: "".data(using: .utf8)
+    )
+    let item = HistoryItem()
+    Storage.shared.context.insert(item)
+    item.contents = [fileURLContent, universalClipboardContent]
+    XCTAssertEqual(item.image!.tiffRepresentation, NSImage(data: try! Data(contentsOf: url))!.tiffRepresentation)
+  }
+
+  func testFileFromUniversalClipboard() {
+    let url = URL(fileURLWithPath: "/tmp/foo.bar")
+    let fileURLContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.fileURL.rawValue,
+      value: url.dataRepresentation
+    )
+    let universalClipboardContent = HistoryItemContent(
+      type: NSPasteboard.PasteboardType.universalClipboard.rawValue,
+      value: "".data(using: .utf8)
+    )
+    let item = HistoryItem()
+    Storage.shared.context.insert(item)
+    item.contents = [fileURLContent, universalClipboardContent]
+    item.title = item.generateTitle()
+    XCTAssertEqual(item.title, "file:///tmp/foo.bar")
+  }
+
+  func testItemWithoutData() {
+    let item = historyItem(nil)
+    XCTAssertEqual(item.title, "")
+  }
+
+  func testSeveralItemsCanHaveEmptyPin() {
+    let item1 = historyItem("foo")
+    item1.pin = ""
+    let item2 = historyItem("bar")
+    item2.pin = ""
+    XCTAssertNoThrow(try Storage.shared.context.save())
+    XCTAssertEqual(item1.pin, "")
+    XCTAssertEqual(item2.pin, "")
+  }
+
+  private func historyItem(_ value: String?) -> HistoryItem {
+    let contents = [
+      HistoryItemContent(
         type: NSPasteboard.PasteboardType.string.rawValue,
         value: url.lastPathComponent.data(using: .utf8)
       )

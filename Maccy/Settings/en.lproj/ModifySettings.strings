@@ -1,0 +1,9 @@
+"Title" = "Modify";
+"SearchHeading" = "Search Regex";
+"SearchPrompt" = "Any copy";
+"ModifyHeading" = "Modify Regex";
+"ReplacementHeading" = "Replacement String";
+"InvalidPattern" = "Invalid regular expression";
+"ModifyRulesDescription" = "When copied text matches Search Regex, every match of Modify Regex is replaced with Replacement String. Rules run from top to bottom, and $1, $2, etc. insert captured groups.\nModified copies lose their formatting so that the new text is what gets pasted.";
+"TestHeading" = "Test";
+"TestPrompt" = "Type text to see how the rules change it";

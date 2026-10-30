@@ -158,7 +158,7 @@ class Clipboard {
 
   @objc
   @MainActor
-  func checkForChangesInPasteboard() { // swiftlint:disable:this cyclomatic_complexity
+  func checkForChangesInPasteboard() { // swiftlint:disable:this cyclomatic_complexity function_body_length
     guard pasteboard.changeCount != changeCount else {
       return
     }
@@ -189,6 +189,10 @@ class Clipboard {
 
     if let sourceAppBundle = sourceApp?.bundleIdentifier, shouldIgnore(sourceAppBundle) {
       return
+    }
+
+    if applyModifyRules(to: pasteboard) {
+      changeCount = pasteboard.changeCount
     }
 
     // Some applications (BBEdit, Edge) add 2 items to pasteboard when copying
@@ -327,5 +331,66 @@ class Clipboard {
     }
 
     return newContents
+  }
+}
+
+extension Clipboard {
+  // Types kept when modify rules rewrite an item's text. Others (RTF, HTML,
+  // web archives, app-specific formats) still contain the original text
+  // and would be preferred over the modified string when pasting.
+  private static let typesKeptOnModify: Set<NSPasteboard.PasteboardType> = [
+    .string,
+    .fileURL,
+    .heic,
+    .jpeg,
+    .png,
+    .tiff,
+    .source,
+    .universalClipboard
+  ]
+
+  // Rewrites copied text using modify rules and replaces pasteboard contents
+  // if anything changed. Returns whether the pasteboard was rewritten.
+  func applyModifyRules(to pasteboard: NSPasteboard) -> Bool {
+    let rules = Defaults[.modifyRules]
+    guard !rules.isEmpty, let items = pasteboard.pasteboardItems else {
+      return false
+    }
+
+    // Only read strings at first because some applications provide data lazily.
+    // Copies from Maccy were already modified when they were added to history.
+    let modifiedStrings: [String?] = items.map { item in
+      guard !item.types.contains(.fromMaccy), !shouldIgnore(item),
+            let string = item.string(forType: .string) else {
+        return nil
+      }
+
+      // Compare code units because == treats differently normalized strings as equal.
+      let modifiedString = ModifyRule.apply(rules, to: string)
+      return modifiedString.utf16.elementsEqual(string.utf16) ? nil : modifiedString
+    }
+
+    guard modifiedStrings.contains(where: { $0 != nil }) else {
+      return false
+    }
+
+    // Pasteboard items can't be written back once the pasteboard is cleared,
+    // so copy every item, including the ones that weren't modified.
+    let newItems = zip(items, modifiedStrings).map { item, modifiedString in
+      let newItem = NSPasteboardItem()
+      for type in item.types where modifiedString == nil || Self.typesKeptOnModify.contains(type) {
+        if type == .string, let modifiedString {
+          newItem.setString(modifiedString, forType: type)
+        } else if let data = item.data(forType: type) {
+          newItem.setData(data, forType: type)
+        }
+      }
+      return newItem
+    }
+
+    pasteboard.clearContents()
+    pasteboard.writeObjects(newItems)
+
+    return true
   }
 }

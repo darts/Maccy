@@ -40,11 +40,105 @@ extension SharedStateTests {
       #expect(itemDecorator.thumbnailImage == nil)
     }
 
-    @Test("RTF")
-    func rtf() {
-      let rtf = NSAttributedString(string: "foo").rtf(
-        from: NSRange(0...2),
-        documentAttributes: [:]
+  func testRTF() {
+    let rtf = NSAttributedString(string: "foo").rtf(
+      from: NSRange(0...2),
+      documentAttributes: [:]
+    )
+    let itemDecorator = historyItemDecorator(rtf, .rtf)
+    XCTAssertEqual(itemDecorator.title, "foo")
+    XCTAssertNil(itemDecorator.previewImage)
+    XCTAssertNil(itemDecorator.thumbnailImage)
+  }
+
+  func testHTML() {
+    let html = "<a href='#'>foo</a>".data(using: .utf8)
+    let itemDecorator = historyItemDecorator(html, .html)
+    XCTAssertEqual(itemDecorator.title, "foo")
+    XCTAssertNil(itemDecorator.previewImage)
+    XCTAssertNil(itemDecorator.thumbnailImage)
+  }
+
+  func testImage() {
+    let image = NSImage(named: "StatusBarMenuImage")!
+    let itemDecorator = historyItemDecorator(image)
+    itemDecorator.sizeImages()
+    XCTAssertEqual(itemDecorator.title, "")
+    XCTAssertEqual(itemDecorator.previewImage!.size, image.size)
+    XCTAssertEqual(itemDecorator.thumbnailImage!.size, image.size)
+  }
+
+  // We also need to add test for image with width bigger than max width.
+  func testImageWithHeightBiggerThanMaxHeight() {
+    let image = NSImage(named: "NSApplicationIcon")!
+    let itemDecorator = historyItemDecorator(image)
+    itemDecorator.sizeImages()
+    XCTAssertEqual(itemDecorator.thumbnailImage!.size, NSSize(width: 40, height: 40))
+  }
+
+  func testFile() {
+    let url = URL(fileURLWithPath: "/tmp/foo.bar")
+    let itemDecorator = historyItemDecorator(url)
+    XCTAssertEqual(itemDecorator.title, "file:///tmp/foo.bar")
+    XCTAssertNil(itemDecorator.previewImage)
+    XCTAssertNil(itemDecorator.thumbnailImage)
+  }
+
+  func testFileWithEscapedChars() {
+    let url = URL(fileURLWithPath: "/tmp/产品培训/产品培训.txt")
+    let itemDecorator = historyItemDecorator(url)
+    XCTAssertEqual(itemDecorator.title, "file:///tmp/产品培训/产品培训.txt")
+    XCTAssertNil(itemDecorator.previewImage)
+    XCTAssertNil(itemDecorator.thumbnailImage)
+  }
+
+  func testItemWithoutData() {
+    let itemDecorator = historyItemDecorator(nil)
+    XCTAssertEqual(itemDecorator.title, "")
+    XCTAssertNil(itemDecorator.previewImage)
+    XCTAssertNil(itemDecorator.thumbnailImage)
+  }
+
+  func testUnpinnedByDefault() {
+    let itemDecorator = historyItemDecorator("foo")
+    XCTAssertNil(itemDecorator.item.pin)
+    XCTAssertFalse(itemDecorator.isPinned)
+  }
+
+  func testDeallocatesWhenNoLongerReferenced() {
+    weak var weakDecorator: HistoryItemDecorator?
+
+    autoreleasepool {
+      let itemDecorator = historyItemDecorator("foo")
+      weakDecorator = itemDecorator
+      XCTAssertNotNil(weakDecorator)
+    }
+
+    XCTAssertNil(weakDecorator)
+  }
+
+  func testHighlight() {
+    let itemDecorator = historyItemDecorator("foo bar baz")
+    itemDecorator.highlight("random", [
+      range(from: 1, to: 2, in: itemDecorator),
+      range(from: 8, to: 10, in: itemDecorator)
+    ])
+    var expectedTitle = AttributedString("foo bar baz")
+    expectedTitle[expectedTitle.range(of: "oo")!].font = .bold(.body)()
+    expectedTitle[expectedTitle.range(of: "baz")!].font = .bold(.body)()
+    XCTAssertEqual(itemDecorator.attributedTitle, expectedTitle)
+    itemDecorator.highlight("", [])
+    XCTAssertEqual(itemDecorator.attributedTitle, nil)
+  }
+
+  private func historyItemDecorator(
+    _ value: String?,
+    application: String? = "com.apple.finder"
+  ) -> HistoryItemDecorator {
+    let contents = [
+      HistoryItemContent(
+        type: NSPasteboard.PasteboardType.string.rawValue,
+        value: value?.data(using: .utf8)
       )
       let itemDecorator = historyItemDecorator(rtf, .rtf)
       #expect(itemDecorator.title == "foo")
